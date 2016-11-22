@@ -13,6 +13,7 @@ ON_LINE_DISTANCE = 300
 FARM_POINT_OFFSET = 200  # must be less than ON_LINE_DISTANCE
 STRAFE_OBJECT_MAX_DISTANCE = 200
 NEAREST_RADIUS = 600  # equals to wizard vision range
+BATTLE_SPEED = 3
 
 
 class MoveState:
@@ -42,6 +43,7 @@ def distance(*args):
 
 class MyStrategy:
     GOTO = None
+    look_at = Vec(0, 3200)
 
     plan = deque([Vec(250, 3400)])
     unstack_moving = 0
@@ -51,6 +53,7 @@ class MyStrategy:
     def __init__(self):
         self.line_state = LineState.MOVING_TO_LINE
         self.analyzer = Analyzer()
+        self.tick = 0
 
     def move(self, me: Wizard, world: World, game: Game, move: Move):
         self.me = me
@@ -64,9 +67,11 @@ class MyStrategy:
 
         self._check_state()
         if self.GOTO:
-            self.goto(self.GOTO)
+            self.battle_goto(self.GOTO, self.look_at)
         else:
             self.update()
+
+        self.tick +=1
 
     def _derive_nearest(self):
         self.nearest_objects = []
@@ -94,7 +99,26 @@ class MyStrategy:
             move_target = self.analyzer.farm_point
             self.goto(move_target)
         elif self.line_state == LineState.ON_LINE:
-            self.move_state = MoveState.STAYING
+            self._on_line_update()
+
+    def _on_line_update(self):
+        look_at = self.analyzer.top_line_enemy_center_of_mass
+        stay_at = self.analyzer.farm_point
+        self.battle_goto(stay_at, look_at)
+        self.move_obj.action = ActionType.MAGIC_MISSILE
+
+    def battle_goto(self, target, look_at):
+        v = Vec(target.x - self.me.x, target.y - self.me.y)
+        l = math.hypot(v.x, v.y)
+        v = Vec(v.x/l, v.y/l)
+        ca = math.cos(-self.me.angle)
+        sa = math.sin(-self.me.angle)
+        v = Vec(ca*v.x - sa*v.y, sa*v.x + ca*v.y)
+        self.move_obj.speed = v.x * BATTLE_SPEED
+        self.move_obj.strafe_speed = v.y * BATTLE_SPEED
+
+        turn = self.me.get_angle_to_unit(look_at)
+        self.move_obj.turn = turn
 
     def goto(self, target: Vec):
         if self._check_if_stacked():
