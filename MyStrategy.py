@@ -9,8 +9,10 @@ import math
 
 Vec = namedtuple('Vec', ['x', 'y'])
 LINES_PADDING = 500
-ON_LINE_DISTANCE = 400
+ON_LINE_DISTANCE = 300
+FARM_POINT_OFFSET = 200  # must be less than ON_LINE_DISTANCE
 STRAFE_OBJECT_MAX_DISTANCE = 200
+NEAREST_RADIUS = 600  # equals to wizard vision range
 
 
 class MoveState:
@@ -39,7 +41,7 @@ def distance(*args):
 
 
 class MyStrategy:
-    GOTO = Vec(250, 3400)
+    GOTO = None
 
     plan = deque([Vec(250, 3400)])
     unstack_moving = 0
@@ -60,15 +62,17 @@ class MyStrategy:
         # move.action = ActionType.MAGIC_MISSILE
         self._derive_nearest()
 
-        self.next_goto()
-        # if self.GOTO:
-        #     self.goto(self.GOTO)
+        self._check_state()
+        if self.GOTO:
+            self.goto(self.GOTO)
+        else:
+            self.update()
 
-    def _derive_nearest(self, radius=600):
+    def _derive_nearest(self):
         self.nearest_objects = []
         for obj in self.world.buildings + self.world.minions + self.world.wizards + self.world.trees:
             obj.distance = math.sqrt((self.me.x-obj.x)**2 + (self.me.y-obj.y)**2)
-            if obj.distance <= radius and obj.id != self.me.id:
+            if obj.distance <= NEAREST_RADIUS and obj.id != self.me.id:
                 self.nearest_objects.append(obj)
 
     def _check_state(self):
@@ -85,39 +89,12 @@ class MyStrategy:
     def _line_state_changed(self, old_state):
         pass
 
-
-    def next_goto(self):
+    def update(self):
         if self.line_state == LineState.MOVING_TO_LINE:
-            move_target = self._calc_farm_point()
-            # self.goto(move_target)
-            self.goto(self.GOTO)
+            move_target = self.analyzer.farm_point
+            self.goto(move_target)
         elif self.line_state == LineState.ON_LINE:
             self.move_state = MoveState.STAYING
-
-
-        # if self.GOTO is None and not self.plan:
-        #     # self.plan.append(self.analyzer.top_bound)
-        #     self.GOTO = self._calc_farm_point()
-        #     # self.GOTO = self.plan.popleft()
-        #
-        # if self.GOTO is None or math.sqrt((self.GOTO.x - self.me.x)**2 + (self.GOTO.y - self.me.y)**2) < 30:
-        #     self.GOTO = self.plan.popleft() if len(self.plan) else None
-        #
-        # if self.GOTO is None and not self.plan:
-        #     self.move_state = MoveState.STAYING
-
-    def _calc_farm_point(self):
-        DIST = 200
-        top = self.analyzer.top_line_bound
-        if top.x >= LINES_PADDING:
-            return Vec(max(0, top.x - DIST), LINES_PADDING / 2)
-        else:
-            return Vec(LINES_PADDING / 2, min(self.world.height, top.y + DIST))
-
-
-
-
-
 
     def goto(self, target: Vec):
         if self._check_if_stacked():
@@ -158,8 +135,6 @@ class MyStrategy:
             self.move_obj.turn = self.game.wizard_max_turn_angle
 
         self.unstack_moving -= 1
-
-
 
     def _calc_turn_angle(self, vec: Vec):
         angle = math.atan2(vec.y, vec.x)
@@ -232,12 +207,10 @@ class Analyzer(object):
             else:
                 self.middle_line.append(minion)
 
-
     def _reset_cached_values(self):
         self._top_bound = None
         self._top_enemy_center = None
-
-
+        self._farm_point = None
 
     @property
     def top_line_bound(self):
@@ -293,6 +266,19 @@ class Analyzer(object):
             return self.top_line_bound
         else:
             return Vec(x_sum/count, y_sum/count)
+
+    @property
+    def farm_point(self):
+        if self._farm_point is None:
+            self._farm_point = self._calc_farm_point()
+        return self._farm_point
+
+    def _calc_farm_point(self):
+        top = self.top_line_bound
+        if top.x >= LINES_PADDING:
+            return Vec(max(0, top.x - FARM_POINT_OFFSET), LINES_PADDING / 2)
+        else:
+            return Vec(LINES_PADDING / 2, min(self.world.height, top.y + FARM_POINT_OFFSET))
 
 
 
