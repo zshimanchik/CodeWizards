@@ -10,7 +10,7 @@ import math
 Vec = namedtuple('Vec', ['x', 'y'])
 LINES_PADDING = 500
 ON_LINE_DISTANCE = 300
-FARM_POINT_OFFSET = 200  # must be less than ON_LINE_DISTANCE
+FARM_POINT_OFFSET = 100  # must be less than ON_LINE_DISTANCE
 STRAFE_OBJECT_MAX_DISTANCE = 200
 NEAREST_RADIUS = 600  # equals to wizard vision range
 BATTLE_SPEED = 3
@@ -102,10 +102,15 @@ class MyStrategy:
             self._on_line_update()
 
     def _on_line_update(self):
-        look_at = self.analyzer.top_line_enemy_center_of_mass
+        enemy = self._choice_enemy_to_shoot()
+        if enemy:
+            self.move_obj.action = ActionType.MAGIC_MISSILE
+            self.move_obj.min_cast_distance = enemy.distance - enemy.radius
+            look_at = enemy
+        else:
+            look_at = self.analyzer.top_line_enemy_center_of_mass
         stay_at = self.analyzer.farm_point
         self.battle_goto(stay_at, look_at)
-        self.move_obj.action = ActionType.MAGIC_MISSILE
 
     def battle_goto(self, target, look_at):
         v = Vec(target.x - self.me.x, target.y - self.me.y)
@@ -119,6 +124,16 @@ class MyStrategy:
 
         turn = self.me.get_angle_to_unit(look_at)
         self.move_obj.turn = turn
+
+    def _choice_enemy_to_shoot(self):
+        enemies = self.analyzer.top_line_enemies
+        if not enemies:
+            return None
+        best_enemy = None
+        for enemy in enemies:
+            if enemy.distance <= self.game.wizard_cast_range and (best_enemy is None or enemy.life < best_enemy.life):
+                best_enemy = enemy
+        return best_enemy
 
     def goto(self, target: Vec):
         if self._check_if_stacked():
@@ -212,20 +227,27 @@ class MyStrategy:
 class Analyzer(object):
 
     def __init__(self):
+        self._reset_lists()
+        self._reset_cached_values()
+
+    def _reset_lists(self):
         self.top_line = []
         self.middle_line = []
         self.bottom_line = []
-        self._reset_cached_values()
+        self.top_line_enemies = []
+        self.top_line_allies = []
 
     def update(self, world):
         self._reset_cached_values()
-        self.top_line = []
-        self.middle_line = []
-        self.bottom_line = []
+        self._reset_lists()
         self.world = world
-        for minion in world.minions + world.buildings:
+        for minion in world.minions + world.buildings + world.wizards:
             if minion.x < LINES_PADDING or minion.y < LINES_PADDING:
                 self.top_line.append(minion)
+                if minion.faction == Faction.ACADEMY:
+                    self.top_line_allies.append(minion)
+                elif minion.faction == Faction.RENEGADES:
+                    self.top_line_enemies.append(minion)
             elif minion.y > world.height - LINES_PADDING or minion.x > world.width - LINES_PADDING:
                 self.bottom_line.append(minion)
             else:
@@ -242,12 +264,21 @@ class Analyzer(object):
             self._top_bound = self._get_top_line_bound()
         return self._top_bound
 
+    @property
+    def farm_point(self):
+        if self._farm_point is None:
+            self._farm_point = self._calc_farm_point()
+        return self._farm_point
+
+    @property
+    def top_line_enemy_center_of_mass(self):
+        if self._top_enemy_center is None:
+            self._top_enemy_center = self._get_top_line_enemy_center_of_mass(self.top_line_enemies)
+        return self._top_enemy_center
 
     def _get_top_line_bound(self):
         x, y = LINES_PADDING / 2, self.world.height - LINES_PADDING / 2
-        for minion in self.top_line:
-            if minion.faction != Faction.ACADEMY:
-                continue
+        for minion in self.top_line_allies:
             if minion.y < LINES_PADDING:
                 if y > LINES_PADDING or minion.x > x :
                     x = minion.x
@@ -256,33 +287,23 @@ class Analyzer(object):
                 if minion.y < y:
                     x = LINES_PADDING / 2
                     y = minion.y
-        return self._get_center_of_mass(Vec(x, y), self.top_line)
+        return self._get_center_of_mass(Vec(x, y), self.top_line_allies)
 
     def _get_center_of_mass(self, bound_point:Vec, line):
         RADIUS_AROUND_BOUND = 400
         x_sum, y_sum = 0, 0
         count = 0
         for minion in line:
-            if minion.faction != Faction.ACADEMY:
-                continue
             if math.sqrt((bound_point.x - minion.x)**2 + (bound_point.y - minion.y)**2) < RADIUS_AROUND_BOUND:
                 x_sum += minion.x
                 y_sum += minion.y
                 count += 1
         return Vec(x_sum/count, y_sum/count)
 
-    @property
-    def top_line_enemy_center_of_mass(self):
-        if self._top_enemy_center is None:
-            self._top_enemy_center = self._get_top_line_enemy_center_of_mass(self.top_line)
-        return self._top_enemy_center
-
     def _get_top_line_enemy_center_of_mass(self, line):
         x_sum, y_sum = 0, 0
         count = 0
         for minion in line:
-            if minion.faction != Faction.RENEGADES:
-                continue
             x_sum += minion.x
             y_sum += minion.y
             count += 1
@@ -290,12 +311,6 @@ class Analyzer(object):
             return self.top_line_bound
         else:
             return Vec(x_sum/count, y_sum/count)
-
-    @property
-    def farm_point(self):
-        if self._farm_point is None:
-            self._farm_point = self._calc_farm_point()
-        return self._farm_point
 
     def _calc_farm_point(self):
         top = self.top_line_bound
