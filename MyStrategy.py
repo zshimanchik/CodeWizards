@@ -60,7 +60,7 @@ class MyStrategy:
         self.world = world
         self.game = game
         self.move_obj = move
-        self.analyzer.update(self.world)
+        self.analyzer.update(self.me, self.world)
 
         # move.action = ActionType.MAGIC_MISSILE
         self._derive_nearest()
@@ -142,8 +142,9 @@ class MyStrategy:
         self.move_state = MoveState.MOVING_TO_TARGET
 
         self.move_obj.speed = self.game.wizard_forward_speed
+        angle = self.me.get_angle_to_unit(target)
+        self.move_obj.turn = angle
         vec = Vec(target.x - self.me.x, target.y - self.me.y)
-        self.move_obj.turn = self._calc_turn_angle(vec)
         self.move_obj.strafe_speed = self._calc_strafe(vec)
 
     def _check_if_stacked(self):
@@ -237,16 +238,17 @@ class Analyzer(object):
         self.top_line_enemies = []
         self.top_line_allies = []
 
-    def update(self, world):
+    def update(self, me, world):
         self._reset_cached_values()
         self._reset_lists()
         self.world = world
+        self.me = me
         for minion in world.minions + world.buildings + world.wizards:
             if minion.x < LINES_PADDING or minion.y < LINES_PADDING:
                 self.top_line.append(minion)
-                if minion.faction == Faction.ACADEMY:
+                if minion.faction == self.me.faction:
                     self.top_line_allies.append(minion)
-                elif minion.faction == Faction.RENEGADES:
+                elif minion.faction == opposite_faction(self.me.faction):
                     self.top_line_enemies.append(minion)
             elif minion.y > world.height - LINES_PADDING or minion.x > world.width - LINES_PADDING:
                 self.bottom_line.append(minion)
@@ -298,7 +300,7 @@ class Analyzer(object):
                 x_sum += minion.x
                 y_sum += minion.y
                 count += 1
-        return Vec(x_sum/count, y_sum/count)
+        return Vec(x_sum/count, y_sum/count) if count else bound_point
 
     def _get_top_line_enemy_center_of_mass(self, line):
         x_sum, y_sum = 0, 0
@@ -321,7 +323,8 @@ class Analyzer(object):
 
 
 
-
+def opposite_faction(faction):
+    return Faction.RENEGADES if faction == Faction.ACADEMY else Faction.ACADEMY
 
 
 
