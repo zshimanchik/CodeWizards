@@ -6,6 +6,7 @@ from model.Move import Move
 from model.Wizard import Wizard
 from model.World import World
 import math
+import random
 
 Vec = namedtuple('Vec', ['x', 'y'])
 LINES_PADDING = 500
@@ -47,6 +48,7 @@ class MyStrategy:
 
     plan = deque([Vec(250, 3400)])
     unstack_moving = 0
+    unstack_strafe_direction = 1
     move_state = MoveState.STAYING
 
 
@@ -62,7 +64,6 @@ class MyStrategy:
         self.move_obj = move
         self.analyzer.update(self.me, self.world)
 
-        # move.action = ActionType.MAGIC_MISSILE
         self._derive_nearest()
 
         self._check_state()
@@ -96,7 +97,7 @@ class MyStrategy:
 
     def update(self):
         if self.line_state == LineState.MOVING_TO_LINE:
-            move_target = self.analyzer.farm_point
+            move_target = self._build_path_to_farm_point()
             self.goto(move_target)
         elif self.line_state == LineState.ON_LINE:
             self._on_line_update()
@@ -150,13 +151,15 @@ class MyStrategy:
     def _check_if_stacked(self):
         if self.move_state == MoveState.MOVING_TO_TARGET and self.me.speed_x == self.me.speed_y == 0:
             self.move_state = MoveState.STACKED
-            self.unstack_moving = 10
+            self.unstack_strafe_direction = random.choice([-1, 1])
+            self.unstack_moving = random.randint(7, 20)
             self._move_to_unstack()
             return True
 
         if self.move_state == MoveState.STACKED and self.me.speed_x == self.me.speed_y == 0:
             self.move_state = MoveState.STACKED_BACKWARD
-            self.unstack_moving = 10
+            self.unstack_strafe_direction = random.choice([-1, 1])
+            self.unstack_moving = random.randint(7, 20)
             self._move_to_unstack()
             return True
 
@@ -167,12 +170,15 @@ class MyStrategy:
         return False
 
     def _move_to_unstack(self):
+        self.move_obj.action = ActionType.MAGIC_MISSILE
         if self.move_state == MoveState.STACKED:
             self.move_obj.speed = -self.game.wizard_backward_speed
+            self.move_obj.strafe_speed = math.copysign(self.game.wizard_strafe_speed, self.unstack_strafe_direction)
 
         if self.move_state == MoveState.STACKED_BACKWARD:
             self.move_obj.speed = self.game.wizard_forward_speed / 2
             self.move_obj.turn = self.game.wizard_max_turn_angle
+            self.move_obj.strafe_speed = math.copysign(self.game.wizard_strafe_speed, self.unstack_strafe_direction)
 
         self.unstack_moving -= 1
 
@@ -223,6 +229,22 @@ class MyStrategy:
         if d_angle < -math.pi:
             d_angle += math.pi*2
         return d_angle
+
+    def _build_path_to_farm_point(self):
+        fp = self.analyzer.farm_point
+        if self.me.y > self.world.height-700:
+            return Vec(LINES_PADDING/2, self.world.height-800)
+        if self.me.y > LINES_PADDING and self.me.x > LINES_PADDING:
+            if fp.x <= LINES_PADDING or self.me.x < self.me.y:
+                return Vec(LINES_PADDING/2, self.me.y)
+            else:
+                return Vec(self.me.x, LINES_PADDING/2)
+        if fp.x < LINES_PADDING:
+            return fp
+        if self.me.y > LINES_PADDING:
+            return Vec(LINES_PADDING/2, LINES_PADDING/2)
+        else:
+            return fp
 
 
 class Analyzer(object):
