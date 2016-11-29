@@ -12,7 +12,10 @@ import random
 Vec = namedtuple('Vec', ['x', 'y'])
 LINES_PADDING = 500
 ON_LINE_DISTANCE = 300
-FARM_POINT_OFFSET = 100  # must be less than ON_LINE_DISTANCE
+LIFE_THRESHOLD_FOR_SAVING = 50
+FARM_POINT_OFFSET = 50  # must be less than ON_LINE_DISTANCE
+LIFE_REGEN_OFFSET = 400
+
 STRAFE_OBJECT_MAX_DISTANCE = 200
 NEAREST_RADIUS = 600  # equals to wizard vision range
 BATTLE_SPEED = 3
@@ -55,7 +58,9 @@ class MyStrategy:
 
     def __init__(self):
         self.line_state = LineState.MOVING_TO_LINE
-        self.analyzer = Analyzer()
+
+        self._reset_lists()
+        self._reset_cached_values()
         self.tick = 0
 
     def move(self, me: Wizard, world: World, game: Game, move: Move):
@@ -63,7 +68,7 @@ class MyStrategy:
         self.world = world
         self.game = game
         self.move_obj = move
-        self.analyzer.update(self.me, self.world)
+        self.update_analyzing()
 
         self._derive_nearest()
 
@@ -86,7 +91,7 @@ class MyStrategy:
                 self.enemies_in_cast_range.append(obj)
 
     def _check_state(self):
-        if distance(self.me, self.analyzer.top_line_bound) < ON_LINE_DISTANCE:
+        if distance(self.me, self.top_line_bound) < ON_LINE_DISTANCE:
             new_state = LineState.ON_LINE
         else:
             new_state = LineState.MOVING_TO_LINE
@@ -113,8 +118,8 @@ class MyStrategy:
             self.move_obj.min_cast_distance = enemy.distance - enemy.radius
             look_at = enemy
         else:
-            look_at = self.analyzer.top_line_enemy_center_of_mass
-        stay_at = self.analyzer.farm_point
+            look_at = self.top_line_enemy_center_of_mass
+        stay_at = self.farm_point
         self.battle_goto(stay_at, look_at)
 
     def battle_goto(self, target, look_at):
@@ -233,7 +238,7 @@ class MyStrategy:
         return d_angle
 
     def _build_path_to_farm_point(self):
-        fp = self.analyzer.farm_point
+        fp = self.farm_point
         if self.me.y > self.world.height-700:
             return Vec(LINES_PADDING/2, self.world.height-800)
         if self.me.y > LINES_PADDING and self.me.x > LINES_PADDING:
@@ -251,13 +256,6 @@ class MyStrategy:
     def _is_enemy(self, obj):
         return opposite_faction(self.me.faction) == obj.faction
 
-
-class Analyzer(object):
-
-    def __init__(self):
-        self._reset_lists()
-        self._reset_cached_values()
-
     def _reset_lists(self):
         self.top_line = []
         self.middle_line = []
@@ -265,19 +263,17 @@ class Analyzer(object):
         self.top_line_enemies = []
         self.top_line_allies = []
 
-    def update(self, me, world):
+    def update_analyzing(self):
         self._reset_cached_values()
         self._reset_lists()
-        self.world = world
-        self.me = me
-        for minion in world.minions + world.buildings + world.wizards:
+        for minion in self.world.minions + self.world.buildings + self.world.wizards:
             if minion.x < LINES_PADDING or minion.y < LINES_PADDING:
                 self.top_line.append(minion)
                 if minion.faction == self.me.faction:
                     self.top_line_allies.append(minion)
                 elif minion.faction == opposite_faction(self.me.faction):
                     self.top_line_enemies.append(minion)
-            elif minion.y > world.height - LINES_PADDING or minion.x > world.width - LINES_PADDING:
+            elif minion.y > self.world.height - LINES_PADDING or minion.x > self.world.width - LINES_PADDING:
                 self.bottom_line.append(minion)
             else:
                 self.middle_line.append(minion)
@@ -341,12 +337,22 @@ class Analyzer(object):
         else:
             return Vec(x_sum/count, y_sum/count)
 
-    def _calc_farm_point(self):
+    def get_farm_point_with_offset(self, offset):
         top = self.top_line_bound
         if top.x >= LINES_PADDING:
-            return Vec(max(0, top.x - FARM_POINT_OFFSET), LINES_PADDING / 2)
+            point = Vec(max(0, top.x - offset), LINES_PADDING / 2)
+            if point.x < LINES_PADDING/2:
+                return Vec(LINES_PADDING /2, LINES_PADDING - point.x)
+            else:
+                return point
         else:
-            return Vec(LINES_PADDING / 2, min(self.world.height, top.y + FARM_POINT_OFFSET))
+            return Vec(LINES_PADDING / 2, min(self.world.height-300, top.y + offset))
+
+    def _calc_farm_point(self):
+        if self.me.life < LIFE_THRESHOLD_FOR_SAVING:
+            return self.get_farm_point_with_offset(LIFE_REGEN_OFFSET)
+        else:
+            return self.get_farm_point_with_offset(FARM_POINT_OFFSET)
 
 
 
