@@ -5,6 +5,7 @@ from model.Game import Game
 from model.Move import Move
 from model.Wizard import Wizard
 from model.World import World
+from model.Building import Building
 import math
 import random
 
@@ -76,10 +77,13 @@ class MyStrategy:
 
     def _derive_nearest(self):
         self.nearest_objects = []
+        self.enemies_in_cast_range = []
         for obj in self.world.buildings + self.world.minions + self.world.wizards + self.world.trees:
             obj.distance = math.sqrt((self.me.x-obj.x)**2 + (self.me.y-obj.y)**2)
             if obj.distance <= NEAREST_RADIUS and obj.id != self.me.id:
                 self.nearest_objects.append(obj)
+            if self._is_enemy(obj) and obj.distance <= self.game.wizard_cast_range:
+                self.enemies_in_cast_range.append(obj)
 
     def _check_state(self):
         if distance(self.me, self.analyzer.top_line_bound) < ON_LINE_DISTANCE:
@@ -127,13 +131,11 @@ class MyStrategy:
         self.move_obj.turn = turn
 
     def _choice_enemy_to_shoot(self):
-        enemies = self.analyzer.top_line_enemies
-        if not enemies:
-            return None
-        best_enemy = None
-        for enemy in enemies:
-            if enemy.distance <= self.game.wizard_cast_range and (best_enemy is None or enemy.life < best_enemy.life):
-                best_enemy = enemy
+        best_enemy = min(
+            self.enemies_in_cast_range,
+            key=lambda x: x.life + isinstance(x, Wizard) * (-2000) + isinstance(x, Building) * (-1000),
+            default=None
+        )
         return best_enemy
 
     def goto(self, target: Vec):
@@ -245,6 +247,9 @@ class MyStrategy:
             return Vec(LINES_PADDING/2, LINES_PADDING/2)
         else:
             return fp
+
+    def _is_enemy(self, obj):
+        return opposite_faction(self.me.faction) == obj.faction
 
 
 class Analyzer(object):
