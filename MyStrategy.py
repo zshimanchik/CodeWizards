@@ -1,4 +1,6 @@
 from collections import namedtuple, deque
+from itertools import chain
+
 from model.ActionType import ActionType
 from model.Faction import Faction
 from model.Game import Game
@@ -9,12 +11,23 @@ from model.Building import Building
 import math
 import random
 
+
+try:
+    from debug_client import DebugClient
+except:
+    debug = None
+else:
+    debug = DebugClient()
+# debug = False
+
+
 Vec = namedtuple('Vec', ['x', 'y'])
 LINES_PADDING = 500
 ON_LINE_DISTANCE = 300
 LIFE_THRESHOLD_FOR_SAVING = 50
 FARM_POINT_OFFSET = 50  # must be less than ON_LINE_DISTANCE
 LIFE_REGEN_OFFSET = 400
+TARGET_DISTANCE_TO_STAY = 50
 
 STRAFE_OBJECT_MAX_DISTANCE = 200
 NEAREST_RADIUS = 600  # equals to wizard vision range
@@ -22,15 +35,15 @@ BATTLE_SPEED = 3
 
 
 class MoveState:
-    STAYING = 0
-    MOVING_TO_TARGET = 1
-    STACKED = 2
-    STACKED_BACKWARD = 3
+    STAYING = 'staying'
+    MOVING_TO_TARGET = 'moving_to_target'
+    STACKED = 'stacked'
+    STACKED_BACKWARD = 'stacked_backward'
 
 
 class LineState:
-    MOVING_TO_LINE = 0
-    ON_LINE = 1
+    MOVING_TO_LINE = 'moving_to_line'
+    ON_LINE = 'on_line'
 
 
 def distance(*args):
@@ -40,9 +53,9 @@ def distance(*args):
     obj1, obj2 must have x,y attributes
     """
     if len(args) == 4:
-        return math.sqrt((args[0]-args[2])**2 + (args[1]-args[3])**2)
+        return math.hypot(args[0] - args[2], args[1] - args[3])
     if len(args) == 2:
-        return math.sqrt((args[0].x - args[1].x)**2 + (args[0].y - args[1].y)**2)
+        return math.hypot(args[0].x - args[1].x, args[0].y - args[1].y)
     raise TypeError("distance take exactly 2 or 4 arguments")
 
 
@@ -73,12 +86,21 @@ class MyStrategy:
         self._derive_nearest()
 
         self._check_state()
-        if self.GOTO:
+        if self.GOTO:  # debug purpose to check battle_goto or goto algorithms
             self.battle_goto(self.GOTO, self.look_at)
         else:
             self.update()
 
         self.tick +=1
+
+        if debug:
+            with debug.abs() as dbg:
+                text = []
+                text.append('{:.0f}, {:.0f}'.format(self.me.x, self.me.y))
+                text.append(str(self.move_state))
+                text.append(str(self.line_state))
+                for i, line in enumerate(text):
+                    dbg.text(600, 300+i*14, line, (1, 0, 0))
 
     def _derive_nearest(self):
         self.nearest_objects = []
@@ -123,6 +145,10 @@ class MyStrategy:
         self.battle_goto(stay_at, look_at)
 
     def battle_goto(self, target, look_at):
+        if debug:
+            with debug.post() as dbg:
+                dbg.fill_circle(target.x, target.y, 10, (1,0,1))
+                dbg.fill_circle(look_at.x, look_at.y, 10, (0,0,1))
         v = Vec(target.x - self.me.x, target.y - self.me.y)
         l = math.hypot(v.x, v.y)
         v = Vec(v.x/l, v.y/l)
@@ -144,10 +170,19 @@ class MyStrategy:
         return best_enemy
 
     def goto(self, target: Vec):
+        if debug:
+            with debug.post() as dbg:
+                dbg.fill_circle(target.x, target.y, 10, (1,0,1))
+                dbg.line(self.me.x, self.me.y, target.x, target.y, (1,0,1))
+
         if self._check_if_stacked():
             return
 
-        self.move_state = MoveState.MOVING_TO_TARGET
+        if distance(self.me, target) < TARGET_DISTANCE_TO_STAY:
+            self.move_state = MoveState.STAYING
+            return
+        else:
+            self.move_state = MoveState.MOVING_TO_TARGET
 
         self.move_obj.speed = self.game.wizard_forward_speed
         angle = self.me.get_angle_to_unit(target)
@@ -266,7 +301,7 @@ class MyStrategy:
     def update_analyzing(self):
         self._reset_cached_values()
         self._reset_lists()
-        for minion in self.world.minions + self.world.buildings + self.world.wizards:
+        for minion in chain(self.world.minions, self.world.buildings, self.world.wizards):
             if minion.x < LINES_PADDING or minion.y < LINES_PADDING:
                 self.top_line.append(minion)
                 if minion.faction == self.me.faction:
