@@ -18,7 +18,7 @@ except:
     debug = None
 else:
     debug = DebugClient()
-# debug = False
+debug = False
 
 
 Vec = namedtuple('Vec', ['x', 'y'])
@@ -31,6 +31,8 @@ TARGET_DISTANCE_TO_STAY = 50
 
 STRAFE_OBJECT_MAX_DISTANCE = 200
 NEAREST_RADIUS = 600  # equals to wizard vision range
+MATRIX_CELL_SIZE = 40
+MATRIX_CELL_AMOUNT = int(NEAREST_RADIUS * 2 / MATRIX_CELL_SIZE)
 BATTLE_SPEED = 3
 
 
@@ -67,11 +69,11 @@ class MyStrategy:
     unstack_moving = 0
     unstack_strafe_direction = 1
     move_state = MoveState.STAYING
+    matrix = [[0] * MATRIX_CELL_AMOUNT for _ in range(MATRIX_CELL_AMOUNT)]
 
 
     def __init__(self):
         self.line_state = LineState.MOVING_TO_LINE
-
         self._reset_lists()
         self._reset_cached_values()
         self.tick = 0
@@ -94,6 +96,27 @@ class MyStrategy:
         self.tick +=1
 
         if debug:
+            with debug.pre() as dbg:
+                matrix_top = self.me.y - MATRIX_CELL_SIZE * MATRIX_CELL_AMOUNT/2
+                matrix_left = self.me.x - MATRIX_CELL_SIZE * MATRIX_CELL_AMOUNT/2
+                for row, row_value in enumerate(self.matrix):
+                    for col, value in enumerate(row_value):
+                        if value == 0:
+                            color = (0.9, 0.9, 0.9)
+                        elif value == 666:
+                            color = (0.9, 0.6, 0.6)
+                        elif value > 0:
+                            color_value = min(0.9, value / 30)
+                            color = (0.9-color_value, 0.9, 0.9-color_value)
+                        else:
+                            color = (0.8, 0.8, 1)
+                        dbg.fill_rect(
+                            matrix_left + col * MATRIX_CELL_SIZE + 1,
+                            matrix_top + row * MATRIX_CELL_SIZE + 1,
+                            matrix_left + (col+1) * MATRIX_CELL_SIZE - 1,
+                            matrix_top + (row+1) * MATRIX_CELL_SIZE - 1,
+                            color
+                        )
             with debug.abs() as dbg:
                 text = []
                 text.append('{:.0f}, {:.0f}'.format(self.me.x, self.me.y))
@@ -105,12 +128,25 @@ class MyStrategy:
     def _derive_nearest(self):
         self.nearest_objects = []
         self.enemies_in_cast_range = []
-        for obj in self.world.buildings + self.world.minions + self.world.wizards + self.world.trees:
-            obj.distance = math.sqrt((self.me.x-obj.x)**2 + (self.me.y-obj.y)**2)
+        self.matrix = [[0]* MATRIX_CELL_AMOUNT for _ in range(MATRIX_CELL_AMOUNT)]
+        matrix_top = self.me.y - MATRIX_CELL_SIZE * MATRIX_CELL_AMOUNT/2
+        matrix_left = self.me.x - MATRIX_CELL_SIZE * MATRIX_CELL_AMOUNT/2
+        for obj in chain(self.world.buildings, self.world.minions, self.world.wizards, self.world.trees):
+            obj.distance = distance(self.me, obj)
             if obj.distance <= NEAREST_RADIUS and obj.id != self.me.id:
                 self.nearest_objects.append(obj)
             if self._is_enemy(obj) and obj.distance <= self.game.wizard_cast_range:
                 self.enemies_in_cast_range.append(obj)
+
+            col_left = int((obj.x - obj.radius - matrix_left) // MATRIX_CELL_SIZE)
+            col_right = int((obj.x + obj.radius - matrix_left) // MATRIX_CELL_SIZE)
+            row_top = int((obj.y - obj.radius - matrix_top) // MATRIX_CELL_SIZE)
+            row_bottom = int((obj.y + obj.radius - matrix_top) // MATRIX_CELL_SIZE)
+
+            for row in range(row_top, row_bottom + 1):
+                for col in range(col_left, col_right + 1):
+                    if 0 <= col < MATRIX_CELL_AMOUNT and 0 <= row < MATRIX_CELL_AMOUNT:
+                        self.matrix[row][col] = -1
 
     def _check_state(self):
         if distance(self.me, self.top_line_bound) < ON_LINE_DISTANCE:
@@ -142,15 +178,116 @@ class MyStrategy:
         else:
             look_at = self.top_line_enemy_center_of_mass
         stay_at = self.farm_point
-        self.battle_goto(stay_at, look_at)
+        self.battle_goto_smart(stay_at, look_at)
+        # self.battle_goto(stay_at, look_at)
+
+    def battle_goto_smart(self, target, look_at):
+
+        if debug:
+            with debug.post() as dbg:
+                dbg.fill_circle(target.x, target.y, 10, (0,0,1))
+        if distance(self.me, target) < 1.42 * MATRIX_CELL_SIZE:
+            return self.battle_goto(target, look_at)
+
+        shifted_target = Vec(target.x - MATRIX_CELL_SIZE / 2, target.y - MATRIX_CELL_SIZE / 2)
+        matrix_top = self.me.y - MATRIX_CELL_SIZE * MATRIX_CELL_AMOUNT / 2
+        matrix_left = self.me.x - MATRIX_CELL_SIZE * MATRIX_CELL_AMOUNT / 2
+        target_row = int((shifted_target.y - matrix_top) / MATRIX_CELL_SIZE)
+        target_col = int((shifted_target.x - matrix_left) / MATRIX_CELL_SIZE)
+        me_row = me_col = int(MATRIX_CELL_AMOUNT / 2) -1
+        self.matrix[me_row][me_col] = 1
+        self.matrix[me_row+1][me_col] = 0
+        self.matrix[me_row+1][me_col+1] = 0
+        self.matrix[me_row][me_col+1] = 0
+
+        queue = deque()
+        queue.append((me_row, me_col))
+        stop = False
+        while queue and not stop:
+            cur_row, cur_col = queue.popleft()
+            path_length = self.matrix[cur_row][cur_col] + 1
+            for drow, dcol in ((-1, 0), (0, 1), (1, 0), (0, -1)):
+                row = cur_row - drow
+                col = cur_col - dcol
+                if 0 <= row < MATRIX_CELL_AMOUNT - 1 and 0 <= col < MATRIX_CELL_AMOUNT - 1 and self.empty(row, col) \
+                        and (self.matrix[row][col] == 0 or self.matrix[row][col] > path_length):
+                    self.matrix[row][col] = path_length
+                    queue.append((row, col))
+                    if row == target_row and col == target_col:
+                        stop = True
+                        break
+
+        if self.matrix[target_row][target_col] <= 0:
+            visited = set()
+            visited.add((target_row, target_col))
+            queue = deque()
+            queue.append((target_row, target_col))
+            stop = False
+            while not stop:
+                cur_row, cur_col = queue.popleft()
+                for drow, dcol in ((-1, 0), (0, 1), (1, 0), (0, -1)):
+                    row = cur_row - drow
+                    col = cur_col - dcol
+                    row_col = (row, col)
+                    if 0 <= row < MATRIX_CELL_AMOUNT - 1 and 0 <= col < MATRIX_CELL_AMOUNT - 1 and row_col not in visited:
+                        if self.matrix[row][col] > 0:
+                            target_row, target_col = row, col
+                            stop = True
+                            break
+                        visited.add(row_col)
+                        queue.append(row_col)
+
+        path = []
+
+        cur_row, cur_col = target_row, target_col
+        path_length = self.matrix[target_row][target_col] - 1
+        while (cur_row, cur_col) != (me_row, me_col):
+            for drow, dcol in ((-1, 0), (0, 1), (1, 0), (0, -1)):
+                row = cur_row - drow
+                col = cur_col - dcol
+                if 0 <= row < MATRIX_CELL_AMOUNT - 1 and 0 <= col < MATRIX_CELL_AMOUNT - 1 \
+                        and self.matrix[row][col] == path_length:
+                    path.append((row, col))
+                    cur_row, cur_col = row, col
+                    path_length -= 1
+                    break
+
+        for row, col in path:
+            self.matrix[row][col] = 666
+
+        if len(path) == 0:
+            return self.battle_goto(target, look_at)
+        elif len(path) > 1:
+            row, col = path[-2]
+        else:
+            row, col = path[-1]
+        target = Vec(matrix_left + (col+1) * MATRIX_CELL_SIZE, matrix_top + (row+1) * MATRIX_CELL_SIZE)
+        if debug:
+            with debug.abs() as dbg:
+                dbg.text(400, 250, 'smart', (1, 0,0))
+        self.battle_goto(target, look_at)
+
+
+
+    def empty(self, row_start, col_start):
+        row_end = row_start+1
+        col_end = col_start+1
+        for row in range(row_start, row_end+1):
+            for col in range(col_start, col_end+1):
+                if self.matrix[row][col] < 0:
+                    return False
+        return True
 
     def battle_goto(self, target, look_at):
         if debug:
             with debug.post() as dbg:
-                dbg.fill_circle(target.x, target.y, 10, (1,0,1))
-                dbg.fill_circle(look_at.x, look_at.y, 10, (0,0,1))
+                dbg.fill_circle(target.x, target.y, 5, (1,0,1))
+                # dbg.fill_circle(look_at.x, look_at.y, 10, (0,0,1))
         v = Vec(target.x - self.me.x, target.y - self.me.y)
         l = math.hypot(v.x, v.y)
+        if l == 0:
+            return
+
         v = Vec(v.x/l, v.y/l)
         ca = math.cos(-self.me.angle)
         sa = math.sin(-self.me.angle)
