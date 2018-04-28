@@ -18,10 +18,18 @@ except:
     debug = None
 else:
     debug = DebugClient()
-debug = False
+# debug = False
 
 
-Vec = namedtuple('Vec', ['x', 'y'])
+class Vec:
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+
+    def __str__(self):
+        return f'Vec({self.x:.2f}, {self.y:.2f})'
+
+
 LINES_PADDING = 500
 ON_LINE_DISTANCE = 300
 LIFE_THRESHOLD_FOR_SAVING = 50
@@ -84,6 +92,7 @@ class MyStrategy:
         self.game = game
         self.move_obj = move
         self.update_analyzing()
+        self.text = []
 
         self._derive_nearest()
 
@@ -262,12 +271,7 @@ class MyStrategy:
         else:
             row, col = path[-1]
         target = Vec(matrix_left + (col+1) * MATRIX_CELL_SIZE, matrix_top + (row+1) * MATRIX_CELL_SIZE)
-        if debug:
-            with debug.abs() as dbg:
-                dbg.text(400, 250, 'smart', (1, 0,0))
         self.battle_goto(target, look_at)
-
-
 
     def empty(self, row_start, col_start):
         row_end = row_start+1
@@ -281,19 +285,15 @@ class MyStrategy:
     def battle_goto(self, target, look_at):
         if debug:
             with debug.post() as dbg:
-                dbg.fill_circle(target.x, target.y, 5, (1,0,1))
+                dbg.fill_circle(target.x, target.y, 5, (1, 0, 1))
                 # dbg.fill_circle(look_at.x, look_at.y, 10, (0,0,1))
-        v = Vec(target.x - self.me.x, target.y - self.me.y)
-        l = math.hypot(v.x, v.y)
-        if l == 0:
-            return
 
-        v = Vec(v.x/l, v.y/l)
-        ca = math.cos(-self.me.angle)
-        sa = math.sin(-self.me.angle)
-        v = Vec(ca*v.x - sa*v.y, sa*v.x + ca*v.y)
-        self.move_obj.speed = v.x * BATTLE_SPEED
-        self.move_obj.strafe_speed = v.y * BATTLE_SPEED
+        delta_v = Vec(target.x - self.me.x, target.y - self.me.y)
+        cos_a = math.cos(-self.me.angle)
+        sin_a = math.sin(-self.me.angle)
+        delta_v = Vec(cos_a * delta_v.x - sin_a * delta_v.y, sin_a * delta_v.x + cos_a * delta_v.y)
+        self.move_obj.speed = delta_v.x
+        self.move_obj.strafe_speed = delta_v.y
 
         turn = self.me.get_angle_to_unit(look_at)
         self.move_obj.turn = turn
