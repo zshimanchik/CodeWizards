@@ -440,17 +440,19 @@ class MyStrategy:
 
     @cached_property
     def top_line_bound(self):
+        RADIUS_AROUND_BOUND = 400
         x, y = LINES_PADDING / 2, self.world.height - LINES_PADDING / 2
         for minion in self.top_line_allies:
             if minion.y < LINES_PADDING:
-                if y > LINES_PADDING or minion.x > x :
+                if y > LINES_PADDING or minion.x > x:
                     x = minion.x
                     y = LINES_PADDING / 2
             else:
                 if minion.y < y:
                     x = LINES_PADDING / 2
                     y = minion.y
-        return self._get_center_of_mass(Vec(x, y), self.top_line_allies)
+        vanguard_allies = units_in_radius(self.top_line_allies, Vec(x, y), RADIUS_AROUND_BOUND)
+        return center_of_mass(vanguard_allies) or Vec(x, y)
 
     @cached_property
     def farm_point(self):
@@ -461,27 +463,7 @@ class MyStrategy:
 
     @cached_property
     def top_line_enemy_center_of_mass(self):
-        x_sum, y_sum = 0, 0
-        count = 0
-        for minion in self.top_line_enemies:
-            x_sum += minion.x
-            y_sum += minion.y
-            count += 1
-        if count == 0:
-            return self.top_line_bound
-        else:
-            return Vec(x_sum / count, y_sum / count)
-
-    def _get_center_of_mass(self, bound_point:Vec, line):
-        RADIUS_AROUND_BOUND = 400
-        x_sum, y_sum = 0, 0
-        count = 0
-        for minion in line:
-            if distance(bound_point, minion) < RADIUS_AROUND_BOUND:
-                x_sum += minion.x
-                y_sum += minion.y
-                count += 1
-        return Vec(x_sum/count, y_sum/count) if count else bound_point
+        return center_of_mass(self.top_line_enemies) or self.top_line_bound
 
     def get_farm_point_with_offset(self, offset):
         top = self.top_line_bound
@@ -499,4 +481,21 @@ def opposite_faction(faction):
     return Faction.RENEGADES if faction == Faction.ACADEMY else Faction.ACADEMY
 
 
+def units_in_radius(units, point, radius):
+    for unit in units:
+        if distance(unit, point) < radius:
+            yield unit
 
+
+def center_of_mass(units):
+    x_sum, y_sum = 0, 0
+    count = 0
+    for unit in units:
+        x_sum += unit.x
+        y_sum += unit.y
+        count += 1
+
+    if count == 0:
+        return None
+    else:
+        return Vec(x_sum / count, y_sum / count)
