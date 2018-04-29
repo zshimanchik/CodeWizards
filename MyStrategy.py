@@ -1,4 +1,4 @@
-from collections import namedtuple, deque
+from collections import deque
 from itertools import chain
 
 from model.ActionType import ActionType
@@ -70,7 +70,6 @@ def distance(*args):
 
 
 class MyStrategy:
-    GOTO = None
     look_at = Vec(0, 3200)
 
     plan = deque([Vec(250, 3400)])
@@ -79,12 +78,10 @@ class MyStrategy:
     move_state = MoveState.STAYING
     matrix = [[0] * MATRIX_CELL_AMOUNT for _ in range(MATRIX_CELL_AMOUNT)]
 
-
     def __init__(self):
         self.line_state = LineState.MOVING_TO_LINE
         self._reset_lists()
         self._reset_cached_values()
-        self.tick = 0
 
     def move(self, me: Wizard, world: World, game: Game, move: Move):
         self.me = me
@@ -93,16 +90,15 @@ class MyStrategy:
         self.move_obj = move
         self.update_analyzing()
         self.text = []
+        if debug:
+            self.text.append(f'tick: {self.world.tick_index}')
+            self.text.append('{:.0f}, {:.0f}'.format(self.me.x, self.me.y))
+            self.text.append(str(self.move_state))
+            self.text.append(str(self.line_state))
 
         self._derive_nearest()
-
         self._check_state()
-        if self.GOTO:  # debug purpose to check battle_goto or goto algorithms
-            self.battle_goto(self.GOTO, self.look_at)
-        else:
-            self.update()
-
-        self.tick +=1
+        self.update()
 
         if debug:
             with debug.pre() as dbg:
@@ -127,11 +123,7 @@ class MyStrategy:
                             color
                         )
             with debug.abs() as dbg:
-                text = []
-                text.append('{:.0f}, {:.0f}'.format(self.me.x, self.me.y))
-                text.append(str(self.move_state))
-                text.append(str(self.line_state))
-                for i, line in enumerate(text):
+                for i, line in enumerate(self.text):
                     dbg.text(600, 300+i*14, line, (1, 0, 0))
 
     def _derive_nearest(self):
@@ -202,7 +194,9 @@ class MyStrategy:
         matrix_top = self.me.y - MATRIX_CELL_SIZE * MATRIX_CELL_AMOUNT / 2
         matrix_left = self.me.x - MATRIX_CELL_SIZE * MATRIX_CELL_AMOUNT / 2
         target_row = int((shifted_target.y - matrix_top) / MATRIX_CELL_SIZE)
+        target_row = max(0, min(MATRIX_CELL_AMOUNT-1, target_row))
         target_col = int((shifted_target.x - matrix_left) / MATRIX_CELL_SIZE)
+        target_col = max(0, min(MATRIX_CELL_AMOUNT-1, target_col))
         me_row = me_col = int(MATRIX_CELL_AMOUNT / 2) -1
         self.matrix[me_row][me_col] = 1
         self.matrix[me_row+1][me_col] = 0
@@ -377,7 +371,7 @@ class MyStrategy:
 
             x0 = - (a * c) / (a ** 2 + b ** 2)
             y0 = - (b * c) / (a ** 2 + b ** 2)
-            if math.sqrt(x0 ** 2 + y0 ** 2) <= obj.radius + self.me.radius:
+            if math.hypot(x0, y0) <= obj.radius + self.me.radius:
                 if vec.y > 0:
                     if x0 < 0:
                         sign = 1
@@ -394,20 +388,11 @@ class MyStrategy:
     def _get_closest_strafe_object(self):
         closest_obj = None
         for obj in self.nearest_objects:
-            d_angle = self._delta_angle_to(obj)
+            d_angle = self.me.get_angle_to_unit(obj)
             if abs(d_angle) <= math.pi/2 and obj.distance < STRAFE_OBJECT_MAX_DISTANCE \
                     and (closest_obj is None or obj.distance < closest_obj.distance):
                 closest_obj = obj
         return closest_obj
-
-    def _delta_angle_to(self, obj):
-        angle = math.atan2(obj.y - self.me.y, obj.x - self.me.x)
-        d_angle = self.me.angle - angle
-        if d_angle > math.pi:
-            d_angle -= math.pi*2
-        if d_angle < -math.pi:
-            d_angle += math.pi*2
-        return d_angle
 
     def _build_path_to_farm_point(self):
         fp = self.farm_point
@@ -491,7 +476,7 @@ class MyStrategy:
         x_sum, y_sum = 0, 0
         count = 0
         for minion in line:
-            if math.sqrt((bound_point.x - minion.x)**2 + (bound_point.y - minion.y)**2) < RADIUS_AROUND_BOUND:
+            if distance(bound_point, minion) < RADIUS_AROUND_BOUND:
                 x_sum += minion.x
                 y_sum += minion.y
                 count += 1
