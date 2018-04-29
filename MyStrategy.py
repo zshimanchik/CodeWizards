@@ -1,16 +1,16 @@
+import math
+import random
 from collections import deque
 from itertools import chain
 
 from model.ActionType import ActionType
+from model.Building import Building
 from model.Faction import Faction
 from model.Game import Game
 from model.Move import Move
 from model.Wizard import Wizard
 from model.World import World
-from model.Building import Building
-import math
-import random
-
+from utils import cached_property
 
 try:
     from debug_client import DebugClient
@@ -18,7 +18,7 @@ except:
     debug = None
 else:
     debug = DebugClient()
-# debug = False
+debug = False
 
 
 class Vec:
@@ -436,29 +436,10 @@ class MyStrategy:
                 self.middle_line.append(minion)
 
     def _reset_cached_values(self):
-        self._top_bound = None
-        self._top_enemy_center = None
-        self._farm_point = None
+        self.__dict__['__cached_properties'] = dict()
 
-    @property
+    @cached_property
     def top_line_bound(self):
-        if self._top_bound is None:
-            self._top_bound = self._get_top_line_bound()
-        return self._top_bound
-
-    @property
-    def farm_point(self):
-        if self._farm_point is None:
-            self._farm_point = self._calc_farm_point()
-        return self._farm_point
-
-    @property
-    def top_line_enemy_center_of_mass(self):
-        if self._top_enemy_center is None:
-            self._top_enemy_center = self._get_top_line_enemy_center_of_mass(self.top_line_enemies)
-        return self._top_enemy_center
-
-    def _get_top_line_bound(self):
         x, y = LINES_PADDING / 2, self.world.height - LINES_PADDING / 2
         for minion in self.top_line_allies:
             if minion.y < LINES_PADDING:
@@ -471,6 +452,26 @@ class MyStrategy:
                     y = minion.y
         return self._get_center_of_mass(Vec(x, y), self.top_line_allies)
 
+    @cached_property
+    def farm_point(self):
+        if self.me.life < LIFE_THRESHOLD_FOR_SAVING:
+            return self.get_farm_point_with_offset(LIFE_REGEN_OFFSET)
+        else:
+            return self.get_farm_point_with_offset(FARM_POINT_OFFSET)
+
+    @cached_property
+    def top_line_enemy_center_of_mass(self):
+        x_sum, y_sum = 0, 0
+        count = 0
+        for minion in self.top_line_enemies:
+            x_sum += minion.x
+            y_sum += minion.y
+            count += 1
+        if count == 0:
+            return self.top_line_bound
+        else:
+            return Vec(x_sum / count, y_sum / count)
+
     def _get_center_of_mass(self, bound_point:Vec, line):
         RADIUS_AROUND_BOUND = 400
         x_sum, y_sum = 0, 0
@@ -482,18 +483,6 @@ class MyStrategy:
                 count += 1
         return Vec(x_sum/count, y_sum/count) if count else bound_point
 
-    def _get_top_line_enemy_center_of_mass(self, line):
-        x_sum, y_sum = 0, 0
-        count = 0
-        for minion in line:
-            x_sum += minion.x
-            y_sum += minion.y
-            count += 1
-        if count == 0:
-            return self.top_line_bound
-        else:
-            return Vec(x_sum/count, y_sum/count)
-
     def get_farm_point_with_offset(self, offset):
         top = self.top_line_bound
         if top.x >= LINES_PADDING:
@@ -504,13 +493,6 @@ class MyStrategy:
                 return point
         else:
             return Vec(LINES_PADDING / 2, min(self.world.height-300, top.y + offset))
-
-    def _calc_farm_point(self):
-        if self.me.life < LIFE_THRESHOLD_FOR_SAVING:
-            return self.get_farm_point_with_offset(LIFE_REGEN_OFFSET)
-        else:
-            return self.get_farm_point_with_offset(FARM_POINT_OFFSET)
-
 
 
 def opposite_faction(faction):
