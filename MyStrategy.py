@@ -18,7 +18,8 @@ except:
     debug = None
 else:
     debug = DebugClient()
-debug = False
+# debug = False
+DRAW_MATRIX = False
 
 
 class Vec:
@@ -36,12 +37,12 @@ LIFE_THRESHOLD_FOR_SAVING = 50
 FARM_POINT_OFFSET = 50  # must be less than ON_LINE_DISTANCE
 LIFE_REGEN_OFFSET = 400
 TARGET_DISTANCE_TO_STAY = 50
+VANGUARD_ALLY_RADIUS = 400
 
 STRAFE_OBJECT_MAX_DISTANCE = 200
 NEAREST_RADIUS = 600  # equals to wizard vision range
 MATRIX_CELL_SIZE = 40
 MATRIX_CELL_AMOUNT = int(NEAREST_RADIUS * 2 / MATRIX_CELL_SIZE)
-BATTLE_SPEED = 3
 
 
 class MoveState:
@@ -101,27 +102,28 @@ class MyStrategy:
         self.update()
 
         if debug:
-            with debug.pre() as dbg:
-                matrix_top = self.me.y - MATRIX_CELL_SIZE * MATRIX_CELL_AMOUNT/2
-                matrix_left = self.me.x - MATRIX_CELL_SIZE * MATRIX_CELL_AMOUNT/2
-                for row, row_value in enumerate(self.matrix):
-                    for col, value in enumerate(row_value):
-                        if value == 0:
-                            color = (0.9, 0.9, 0.9)
-                        elif value == 666:
-                            color = (0.9, 0.6, 0.6)
-                        elif value > 0:
-                            color_value = min(0.9, value / 30)
-                            color = (0.9-color_value, 0.9, 0.9-color_value)
-                        else:
-                            color = (0.8, 0.8, 1)
-                        dbg.fill_rect(
-                            matrix_left + col * MATRIX_CELL_SIZE + 1,
-                            matrix_top + row * MATRIX_CELL_SIZE + 1,
-                            matrix_left + (col+1) * MATRIX_CELL_SIZE - 1,
-                            matrix_top + (row+1) * MATRIX_CELL_SIZE - 1,
-                            color
-                        )
+            if DRAW_MATRIX:
+                with debug.pre() as dbg:
+                    matrix_top = self.me.y - MATRIX_CELL_SIZE * MATRIX_CELL_AMOUNT/2
+                    matrix_left = self.me.x - MATRIX_CELL_SIZE * MATRIX_CELL_AMOUNT/2
+                    for row, row_value in enumerate(self.matrix):
+                        for col, value in enumerate(row_value):
+                            if value == 0:
+                                color = (0.9, 0.9, 0.9)
+                            elif value == 666:
+                                color = (0.9, 0.6, 0.6)
+                            elif value > 0:
+                                color_value = min(0.9, value / 30)
+                                color = (0.9-color_value, 0.9, 0.9-color_value)
+                            else:
+                                color = (0.8, 0.8, 1)
+                            dbg.fill_rect(
+                                matrix_left + col * MATRIX_CELL_SIZE + 1,
+                                matrix_top + row * MATRIX_CELL_SIZE + 1,
+                                matrix_left + (col+1) * MATRIX_CELL_SIZE - 1,
+                                matrix_top + (row+1) * MATRIX_CELL_SIZE - 1,
+                                color
+                            )
             with debug.abs() as dbg:
                 for i, line in enumerate(self.text):
                     dbg.text(600, 300+i*14, line, (1, 0, 0))
@@ -440,41 +442,37 @@ class MyStrategy:
 
     @cached_property
     def top_line_bound(self):
-        RADIUS_AROUND_BOUND = 400
-        x, y = LINES_PADDING / 2, self.world.height - LINES_PADDING / 2
-        for minion in self.top_line_allies:
-            if minion.y < LINES_PADDING:
-                if y > LINES_PADDING or minion.x > x:
-                    x = minion.x
-                    y = LINES_PADDING / 2
-            else:
-                if minion.y < y:
-                    x = LINES_PADDING / 2
-                    y = minion.y
-        vanguard_allies = units_in_radius(self.top_line_allies, Vec(x, y), RADIUS_AROUND_BOUND)
-        return center_of_mass(vanguard_allies) or Vec(x, y)
+        most_vanguard_ally = max(self.top_line_allies, key=self.top_abs_to_relative_position, default=None)
+        vanguard_allies = units_in_radius(self.top_line_allies, most_vanguard_ally, VANGUARD_ALLY_RADIUS)
+        return center_of_mass(vanguard_allies) or most_vanguard_ally
 
     @cached_property
     def farm_point(self):
         if self.me.life < LIFE_THRESHOLD_FOR_SAVING:
-            return self.get_farm_point_with_offset(LIFE_REGEN_OFFSET)
+            offset = LIFE_REGEN_OFFSET
         else:
-            return self.get_farm_point_with_offset(FARM_POINT_OFFSET)
+            offset = FARM_POINT_OFFSET
+
+        top_relative = self.top_abs_to_relative_position(self.top_line_bound)
+        offset_relative = offset / (self.world.width + self.world.height - LINES_PADDING * 2)
+        farm_point_relative = min(1, max(0, top_relative - offset_relative))
+        return self.top_relative_to_abs_position(farm_point_relative)
 
     @cached_property
     def top_line_enemy_center_of_mass(self):
         return center_of_mass(self.top_line_enemies) or self.top_line_bound
 
-    def get_farm_point_with_offset(self, offset):
-        top = self.top_line_bound
-        if top.x >= LINES_PADDING:
-            point = Vec(max(0, top.x - offset), LINES_PADDING / 2)
-            if point.x < LINES_PADDING/2:
-                return Vec(LINES_PADDING /2, LINES_PADDING - point.x)
-            else:
-                return point
+    def top_abs_to_relative_position(self, point):
+        if point.x < point.y:
+            return (1 - (point.y - LINES_PADDING / 2) / (self.world.height - LINES_PADDING)) / 2
         else:
-            return Vec(LINES_PADDING / 2, min(self.world.height-300, top.y + offset))
+            return 0.5 + ((point.x - LINES_PADDING / 2) / (self.world.width - LINES_PADDING) / 2)
+
+    def top_relative_to_abs_position(self, relative):
+        if relative < 0.5:
+            return Vec(LINES_PADDING / 2, (1 - relative * 2) * (self.world.height - LINES_PADDING) + LINES_PADDING / 2)
+        else:
+            return Vec((relative - 0.5) * 2 * (self.world.width - LINES_PADDING) + LINES_PADDING / 2, LINES_PADDING / 2)
 
 
 def opposite_faction(faction):
