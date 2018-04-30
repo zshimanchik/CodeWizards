@@ -1,6 +1,7 @@
 import math
 import random
 from collections import deque
+from heapq import heappush, heappop
 from itertools import chain
 
 from model.ActionType import ActionType
@@ -205,11 +206,11 @@ class MyStrategy:
         self.matrix[me_row+1][me_col+1] = 0
         self.matrix[me_row][me_col+1] = 0
 
-        queue = deque()
-        queue.append((me_row, me_col))
+        heap = []
+        heappush(heap, (distance(me_row, me_col, target_row, target_col), (me_row, me_col)))
         stop = False
-        while queue and not stop:
-            cur_row, cur_col = queue.popleft()
+        while heap and not stop:
+            _, (cur_row, cur_col) = heappop(heap)
             path_length = self.matrix[cur_row][cur_col] + 1
             for drow, dcol in ((-1, 0), (0, 1), (1, 0), (0, -1)):
                 row = cur_row - drow
@@ -217,7 +218,7 @@ class MyStrategy:
                 if 0 <= row < MATRIX_CELL_AMOUNT - 1 and 0 <= col < MATRIX_CELL_AMOUNT - 1 and self.empty(row, col) \
                         and (self.matrix[row][col] == 0 or self.matrix[row][col] > path_length):
                     self.matrix[row][col] = path_length
-                    queue.append((row, col))
+                    heappush(heap, (distance(row, col, target_row, target_col), (row, col)))
                     if row == target_row and col == target_col:
                         stop = True
                         break
