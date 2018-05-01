@@ -14,14 +14,9 @@ from model.World import World
 from strategy.map import Map
 from utils import cached_property
 
-try:
-    from debug_client import DebugClient
-except:
-    debug = None
-else:
-    debug = DebugClient()
-# debug = False
-DRAW_MATRIX = False
+from constants import *
+
+DEBUG = True
 
 
 class Vec:
@@ -31,20 +26,6 @@ class Vec:
 
     def __str__(self):
         return f'Vec({self.x:.2f}, {self.y:.2f})'
-
-
-LINES_PADDING = 500
-ON_LINE_DISTANCE = 300
-LIFE_THRESHOLD_FOR_SAVING = 50
-FARM_POINT_OFFSET = 50  # must be less than ON_LINE_DISTANCE
-LIFE_REGEN_OFFSET = 400
-TARGET_DISTANCE_TO_STAY = 50
-VANGUARD_ALLY_RADIUS = 400
-
-STRAFE_OBJECT_MAX_DISTANCE = 200
-NEAREST_RADIUS = 600  # equals to wizard vision range
-MATRIX_CELL_SIZE = 40
-MATRIX_CELL_AMOUNT = int(NEAREST_RADIUS * 2 / MATRIX_CELL_SIZE)
 
 
 class MoveState:
@@ -86,6 +67,9 @@ class MyStrategy:
         self._reset_lists()
         self._reset_cached_values()
         self.map = Map()
+        if DEBUG:
+            from drawer import Drawer
+            self.drawer = Drawer()
 
     def move(self, me: Wizard, world: World, game: Game, move: Move):
         self.me = me
@@ -93,50 +77,13 @@ class MyStrategy:
         self.game = game
         self.move_obj = move
         self.update_analyzing()
-        self.text = []
-        if debug:
-            self.text.append(f'tick: {self.world.tick_index}')
-            self.text.append('{:.0f}, {:.0f}'.format(self.me.x, self.me.y))
-            self.text.append(str(self.move_state))
-            self.text.append(str(self.line_state))
-            m = [w for w in self.world.wizards if w.id == 2][0]
-            self.text.append(f'{int(m.x)}, {int(m.y)}')
 
         self._derive_nearest()
         self._check_state()
         self.update()
 
-        if debug:
-            if DRAW_MATRIX:
-                with debug.pre() as dbg:
-                    matrix_top = self.me.y - MATRIX_CELL_SIZE * MATRIX_CELL_AMOUNT/2
-                    matrix_left = self.me.x - MATRIX_CELL_SIZE * MATRIX_CELL_AMOUNT/2
-                    for row, row_value in enumerate(self.matrix):
-                        for col, value in enumerate(row_value):
-                            if value == 0:
-                                color = (0.9, 0.9, 0.9)
-                            elif value == 666:
-                                color = (0.9, 0.6, 0.6)
-                            elif value > 0:
-                                color_value = min(0.9, value / 30)
-                                color = (0.9-color_value, 0.9, 0.9-color_value)
-                            else:
-                                color = (0.8, 0.8, 1)
-                            dbg.fill_rect(
-                                matrix_left + col * MATRIX_CELL_SIZE + 1,
-                                matrix_top + row * MATRIX_CELL_SIZE + 1,
-                                matrix_left + (col+1) * MATRIX_CELL_SIZE - 1,
-                                matrix_top + (row+1) * MATRIX_CELL_SIZE - 1,
-                                color
-                            )
-            with debug.abs() as dbg:
-                for i, line in enumerate(self.text):
-                    dbg.text(600, 300+i*14, line, (1, 0, 0))
-            with debug.pre() as dbg:
-                for map_point in self.map:
-                    dbg.fill_circle(map_point.x, map_point.y, 10, (0,0,1))
-                    for neighbor in map_point.neighbors:
-                        dbg.line(map_point.x, map_point.y, neighbor.x, neighbor.y, (0,0,1))
+        if DEBUG:
+            self.drawer.draw_all(self, me, world, game, move)
 
     def _derive_nearest(self):
         self.nearest_objects = []
@@ -195,10 +142,6 @@ class MyStrategy:
         # self.battle_goto(stay_at, look_at)
 
     def battle_goto_smart(self, target, look_at):
-
-        # if debug:
-        #     with debug.post() as dbg:
-        #         dbg.fill_circle(target.x, target.y, 10, (0,0,1))
         if distance(self.me, target) < 1.42 * MATRIX_CELL_SIZE:
             return self.battle_goto(target, look_at)
 
@@ -289,11 +232,6 @@ class MyStrategy:
         return True
 
     def battle_goto(self, target, look_at):
-        # if debug:
-        #     with debug.post() as dbg:
-        #         dbg.fill_circle(target.x, target.y, 5, (1, 0, 1))
-                # dbg.fill_circle(look_at.x, look_at.y, 10, (0,0,1))
-
         delta_v = Vec(target.x - self.me.x, target.y - self.me.y)
         cos_a = math.cos(-self.me.angle)
         sin_a = math.sin(-self.me.angle)
@@ -313,11 +251,6 @@ class MyStrategy:
         return best_enemy
 
     def goto(self, target: Vec):
-        # if debug:
-        #     with debug.post() as dbg:
-        #         dbg.fill_circle(target.x, target.y, 10, (1,0,1))
-        #         dbg.line(self.me.x, self.me.y, target.x, target.y, (1,0,1))
-
         if self._check_if_stacked():
             return
 
