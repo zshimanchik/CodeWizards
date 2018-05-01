@@ -11,6 +11,7 @@ from model.Game import Game
 from model.Move import Move
 from model.Wizard import Wizard
 from model.World import World
+from strategy.map import Map
 from utils import cached_property
 
 try:
@@ -84,6 +85,7 @@ class MyStrategy:
         self.line_state = LineState.MOVING_TO_LINE
         self._reset_lists()
         self._reset_cached_values()
+        self.map = Map()
 
     def move(self, me: Wizard, world: World, game: Game, move: Move):
         self.me = me
@@ -97,6 +99,8 @@ class MyStrategy:
             self.text.append('{:.0f}, {:.0f}'.format(self.me.x, self.me.y))
             self.text.append(str(self.move_state))
             self.text.append(str(self.line_state))
+            m = [w for w in self.world.wizards if w.id == 2][0]
+            self.text.append(f'{int(m.x)}, {int(m.y)}')
 
         self._derive_nearest()
         self._check_state()
@@ -128,6 +132,11 @@ class MyStrategy:
             with debug.abs() as dbg:
                 for i, line in enumerate(self.text):
                     dbg.text(600, 300+i*14, line, (1, 0, 0))
+            with debug.pre() as dbg:
+                for map_point in self.map:
+                    dbg.fill_circle(map_point.x, map_point.y, 10, (0,0,1))
+                    for neighbor in map_point.neighbors:
+                        dbg.line(map_point.x, map_point.y, neighbor.x, neighbor.y, (0,0,1))
 
     def _derive_nearest(self):
         self.nearest_objects = []
@@ -187,9 +196,9 @@ class MyStrategy:
 
     def battle_goto_smart(self, target, look_at):
 
-        if debug:
-            with debug.post() as dbg:
-                dbg.fill_circle(target.x, target.y, 10, (0,0,1))
+        # if debug:
+        #     with debug.post() as dbg:
+        #         dbg.fill_circle(target.x, target.y, 10, (0,0,1))
         if distance(self.me, target) < 1.42 * MATRIX_CELL_SIZE:
             return self.battle_goto(target, look_at)
 
@@ -280,9 +289,9 @@ class MyStrategy:
         return True
 
     def battle_goto(self, target, look_at):
-        if debug:
-            with debug.post() as dbg:
-                dbg.fill_circle(target.x, target.y, 5, (1, 0, 1))
+        # if debug:
+        #     with debug.post() as dbg:
+        #         dbg.fill_circle(target.x, target.y, 5, (1, 0, 1))
                 # dbg.fill_circle(look_at.x, look_at.y, 10, (0,0,1))
 
         delta_v = Vec(target.x - self.me.x, target.y - self.me.y)
@@ -304,10 +313,10 @@ class MyStrategy:
         return best_enemy
 
     def goto(self, target: Vec):
-        if debug:
-            with debug.post() as dbg:
-                dbg.fill_circle(target.x, target.y, 10, (1,0,1))
-                dbg.line(self.me.x, self.me.y, target.x, target.y, (1,0,1))
+        # if debug:
+        #     with debug.post() as dbg:
+        #         dbg.fill_circle(target.x, target.y, 10, (1,0,1))
+        #         dbg.line(self.me.x, self.me.y, target.x, target.y, (1,0,1))
 
         if self._check_if_stacked():
             return
