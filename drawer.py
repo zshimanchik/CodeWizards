@@ -5,11 +5,14 @@ from model.Wizard import Wizard
 from model.World import World
 
 from constants import *
+from potential_map import PotentialMap
+from utils import distance, distance2
 
 
 class Drawer:
     def __init__(self):
         self.debug = DebugClient()
+        self.draw_potential_map = False
 
     def draw_all(self, strategy, me: Wizard, world: World, game: Game, move: Move):
         self.strategy = strategy
@@ -19,11 +22,34 @@ class Drawer:
         self.move = move
 
         with self.debug.pre() as drawer:
-            self.draw_matrix(drawer)
-            self.draw_map(drawer)
+            if self.draw_potential_map:
+                self._draw_potential_map(drawer)
+            # self.draw_matrix(drawer)
+        #     self.draw_map(drawer)
 
         with self.debug.abs() as drawer:
             self.draw_text(drawer)
+
+    def _draw_potential_map(self, drawer):
+        pm = self.strategy.potential_map
+        assert isinstance(pm, PotentialMap)
+        max_value = pm.map.max()
+        for row in range(pm.CELL_AMOUNT):
+            for col in range(pm.CELL_AMOUNT):
+                x = col * pm.CELL_SIZE + pm.HALF_CELL_SIZE
+                y = row * pm.CELL_SIZE + pm.HALF_CELL_SIZE
+
+                if distance2(self.me.x, self.me.y, x, y) < 1000000:
+                    if pm.map[row, col] > 0:
+                        color_value = min(0.9, pm.map[row, col] / max_value)
+                        color = (0.9 - color_value, 0.9, 0.9 - color_value)
+                        drawer.fill_circle(x, y, 5, color)
+                    else:
+                        color_value = min(0.9, -pm.map[row, col] / max_value)
+                        color = (0.9, 0.9 - color_value, 0.9 - color_value)
+                        drawer.fill_circle(x, y, 5, color)
+
+
 
     def draw_matrix(self, drawer):
         matrix_top = self.me.y - MATRIX_CELL_SIZE * MATRIX_CELL_AMOUNT / 2
@@ -48,7 +74,12 @@ class Drawer:
                 )
 
     def draw_text(self, drawer):
-        keyboard_wizard = [w for w in self.world.wizards if w.id == 2][0]
+        keyboard_wizard = [w for w in self.world.wizards if w.id == 2]
+        if keyboard_wizard:
+            keyboard_wizard = keyboard_wizard[0]
+        else:
+            keyboard_wizard = self.me
+
         text = [
             f'tick: {self.world.tick_index}',
             f'{int(self.me.x)}, {int(self.me.y)}',

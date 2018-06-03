@@ -70,6 +70,9 @@ class MyStrategy:
         if DEBUG:
             from drawer import Drawer
             self.drawer = Drawer()
+            from debug_control import DebugControl
+            self.debug_control = DebugControl(self)
+            self.debug_control.start()
 
     def move(self, me: Wizard, world: World, game: Game, move: Move):
         self.me = me
@@ -79,6 +82,7 @@ class MyStrategy:
         self.update_analyzing()
 
         self._derive_nearest()
+        self.potential_map.update(self)
         self._check_state()
         self.update()
 
