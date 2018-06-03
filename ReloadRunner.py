@@ -33,16 +33,14 @@ class Runner:
             while True:
                 if self.reload:
                     print(f'actually reloading at {world_time}')
-                    my_modules = ['constants', 'debug_client', 'debug_control', 'drawer', 'MyStrategy', 'potential_map', 'utils']
-                    for module in my_modules:
-                        if module in sys.modules:
-                            del sys.modules[module]
-                    import MyStrategy
+                    for module in [x for x in sys.modules if x.startswith('aicup2016')]:
+                        del sys.modules[module]
+                    from aicup2016.strategy import Strategy
 
                     self.strategies = []
                     for _ in range(team_size):
                         self.strategies.append(
-                            MyStrategy.MyStrategy(
+                            Strategy(
                                 debug_client=self.debug_client,
                                 input_event=self.input_event
                             )
@@ -84,7 +82,6 @@ class Runner:
             print('reloading')
         else:
             self.input_event.emit(input)
-            # self.strategies[0].debug_control.handle_input(input)
 
 
 class EventEmitter:

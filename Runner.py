@@ -1,6 +1,6 @@
 import sys
 
-from MyStrategy import MyStrategy
+from aicup2016.strategy import Strategy
 from RemoteProcessClient import RemoteProcessClient
 from model.Move import Move
 
@@ -24,7 +24,7 @@ class Runner:
             strategies = []
 
             for _ in range(team_size):
-                strategies.append(MyStrategy())
+                strategies.append(Strategy())
 
             while True:
                 player_context = self.remote_process_client.read_player_context_message()

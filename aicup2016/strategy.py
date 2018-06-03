@@ -4,7 +4,10 @@ from collections import deque
 from heapq import heappush, heappop
 from itertools import chain
 
-from constants import *
+from aicup2016.constants import *
+from aicup2016.map import Map
+from aicup2016.potential_map import PotentialMap
+from aicup2016.utils import cached_property, distance
 from model.ActionType import ActionType
 from model.Building import Building
 from model.Faction import Faction
@@ -12,9 +15,6 @@ from model.Game import Game
 from model.Move import Move
 from model.Wizard import Wizard
 from model.World import World
-from potential_map import PotentialMap
-from strategy.map import Map
-from utils import cached_property, distance
 
 
 class Vec:
@@ -38,7 +38,7 @@ class LineState:
     ON_LINE = 'on_line'
 
 
-class MyStrategy:
+class Strategy:
     look_at = Vec(0, 3200)
 
     plan = deque([Vec(250, 3400)])
@@ -55,13 +55,13 @@ class MyStrategy:
         self.potential_map = PotentialMap()
 
         if debug_client is not None:
-            from drawer import Drawer
+            from aicup2016.drawer import Drawer
             self.drawer = Drawer(debug_client)
         else:
             self.drawer = None
 
         if input_event is not None:
-            from debug_control import DebugControl
+            from aicup2016.debug_control import DebugControl
             self.debug_control = DebugControl(self, input_event)
 
     def move(self, me: Wizard, world: World, game: Game, move: Move):

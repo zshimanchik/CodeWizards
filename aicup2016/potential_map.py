@@ -1,9 +1,9 @@
 import numpy as np
 
-import constants as c
+from aicup2016 import constants as c
+from aicup2016.utils import distance
 from model.Minion import Minion
 from model.World import World
-from utils import distance
 
 
 class PotentialMap:

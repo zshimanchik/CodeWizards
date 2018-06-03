@@ -1,10 +1,10 @@
-from constants import *
+from aicup2016.constants import *
+from aicup2016.potential_map import PotentialMap
+from aicup2016.utils import distance2
 from model.Game import Game
 from model.Move import Move
 from model.Wizard import Wizard
 from model.World import World
-from potential_map import PotentialMap
-from utils import distance2
 
 
 class Drawer:
