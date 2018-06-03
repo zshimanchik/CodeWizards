@@ -9,6 +9,7 @@ from model.Move import Move
 class Runner:
     def __init__(self):
         self.reload = True
+        self.freeze = False
         self.debug_client = DebugClient()
         self.input_event = EventEmitter()
         self.strategies = []
@@ -31,6 +32,9 @@ class Runner:
             world_time = 0
 
             while True:
+                while self.freeze:
+                    time.sleep(0.5)
+
                 if self.reload:
                     print(f'actually reloading at {world_time}')
                     for module in [x for x in sys.modules if x.startswith('aicup2016')]:
@@ -80,6 +84,9 @@ class Runner:
         if input == 'r':
             self.reload = True
             print('reloading')
+        elif input == 'p':
+            self.freeze = not self.freeze
+            print('pause')
         else:
             self.input_event.emit(input)
 
