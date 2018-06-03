@@ -28,6 +28,9 @@ class PotentialMap:
 
     def build_buildings_map(self):
         self.buildings_map = np.zeros((self.CELL_AMOUNT, self.CELL_AMOUNT))
+        for unit in self.strategy.world.buildings:
+            self.put_simple(self.buildings_map, unit, c.TREE_FORCE, unit.radius + self.strategy.me.radius)
+
         # for tower in self.strategy.world.buildings:
         #     if tower.faction == self.strategy.me.faction:
         #         self.put_simple(self.buildings_map, tower, c.ALLY_TOWER_FORCE, tower.attack_range - c.ALLY_TOWER_RADIUS_DELTA)

@@ -98,7 +98,7 @@ class Strategy:
     def update(self):
         if self.line_state == LineState.MOVING_TO_LINE:
             move_target = self._build_path_to_farm_point()
-            self.goto(move_target)
+            self.battle_goto_potential(move_target, move_target)
         elif self.line_state == LineState.ON_LINE:
             self._on_line_update()
 
@@ -111,17 +111,24 @@ class Strategy:
         else:
             look_at = self.top_line_enemy_center_of_mass
         stay_at = self.farm_point
-        self.stay_at = stay_at
         self.battle_goto_potential(stay_at, look_at)
         # self.battle_goto_smart(stay_at, look_at)
         # self.battle_goto(stay_at, look_at)
 
     def battle_goto_potential(self, target, loot_at):
-        self.potential_map.put_simple(self.potential_map.map, target, 60, 500)
+        delta = target - self.me
+        if delta.length > self.me.vision_range:
+            delta = delta / delta.length * self.me.vision_range
+            target = delta + self.me
+            radius = self.me.vision_range * 1.5
+        else:
+            radius = delta.length * 1.5
+
+        self.stay_at = target
+        self.potential_map.put_simple(self.potential_map.map, target, 60, radius)
         next_target = self.potential_map.get_pos_to_go()
         self.next_target = next_target
         self.battle_goto(next_target, loot_at)
-
 
     def battle_goto_smart(self, target, look_at):
         if distance(self.me, target) < 1.42 * MATRIX_CELL_SIZE:
@@ -214,7 +221,7 @@ class Strategy:
         return True
 
     def battle_goto(self, target, look_at):
-        delta_v = Vec(target.x - self.me.x, target.y - self.me.y)
+        delta_v = target - self.me
         cos_a = math.cos(-self.me.angle)
         sin_a = math.sin(-self.me.angle)
         delta_v = Vec(cos_a * delta_v.x - sin_a * delta_v.y, sin_a * delta_v.x + cos_a * delta_v.y)
@@ -315,9 +322,9 @@ class Strategy:
     def _get_closest_strafe_object(self):
         closest_obj = None
         for obj in self.nearest_objects:
-            d_angle = self.me.get_angle_to_unit(obj)
-            if abs(d_angle) <= math.pi/2 and obj.distance < STRAFE_OBJECT_MAX_DISTANCE \
-                    and (closest_obj is None or obj.distance < closest_obj.distance):
+            if obj.distance < STRAFE_OBJECT_MAX_DISTANCE \
+                    and (closest_obj is None or obj.distance < closest_obj.distance) \
+                    and abs(self.me.get_angle_to_unit(obj)) <= math.pi/2:
                 closest_obj = obj
         return closest_obj
 
