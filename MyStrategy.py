@@ -11,8 +11,9 @@ from model.Game import Game
 from model.Move import Move
 from model.Wizard import Wizard
 from model.World import World
+from potential_map import PotentialMap
 from strategy.map import Map
-from utils import cached_property
+from utils import cached_property, distance
 
 from constants import *
 
@@ -40,19 +41,6 @@ class LineState:
     ON_LINE = 'on_line'
 
 
-def distance(*args):
-    """
-    x1, y1, x2, y2 -> distance
-    obj1, obj2 -> distance
-    obj1, obj2 must have x,y attributes
-    """
-    if len(args) == 4:
-        return math.hypot(args[0] - args[2], args[1] - args[3])
-    if len(args) == 2:
-        return math.hypot(args[0].x - args[1].x, args[0].y - args[1].y)
-    raise TypeError("distance take exactly 2 or 4 arguments")
-
-
 class MyStrategy:
     look_at = Vec(0, 3200)
 
@@ -67,6 +55,7 @@ class MyStrategy:
         self._reset_lists()
         self._reset_cached_values()
         self.map = Map()
+        self.potential_map = PotentialMap()
         if DEBUG:
             from drawer import Drawer
             self.drawer = Drawer()
