@@ -6,36 +6,15 @@ from itertools import chain
 
 from aicup2016.constants import *
 from aicup2016.map import Map
+from aicup2016.models import Vec, MoveState, LineState
 from aicup2016.potential_map import PotentialMap
-from aicup2016.utils import cached_property, distance
+from aicup2016.utils import cached_property, distance, opposite_faction, get_units_in_radius, center_of_mass
 from model.ActionType import ActionType
 from model.Building import Building
-from model.Faction import Faction
 from model.Game import Game
 from model.Move import Move
 from model.Wizard import Wizard
 from model.World import World
-
-
-class Vec:
-    def __init__(self, x, y):
-        self.x = x
-        self.y = y
-
-    def __str__(self):
-        return f'Vec({self.x:.2f}, {self.y:.2f})'
-
-
-class MoveState:
-    STAYING = 'staying'
-    MOVING_TO_TARGET = 'moving_to_target'
-    STACKED = 'stacked'
-    STACKED_BACKWARD = 'stacked_backward'
-
-
-class LineState:
-    MOVING_TO_LINE = 'moving_to_line'
-    ON_LINE = 'on_line'
 
 
 class Strategy:
@@ -132,8 +111,17 @@ class Strategy:
         else:
             look_at = self.top_line_enemy_center_of_mass
         stay_at = self.farm_point
-        self.battle_goto_smart(stay_at, look_at)
+        self.stay_at = stay_at
+        self.battle_goto_potential(stay_at, look_at)
+        # self.battle_goto_smart(stay_at, look_at)
         # self.battle_goto(stay_at, look_at)
+
+    def battle_goto_potential(self, target, loot_at):
+        self.potential_map.put_simple(self.potential_map.map, target, 60, 500)
+        next_target = self.potential_map.get_pos_to_go()
+        self.next_target = next_target
+        self.battle_goto(next_target, loot_at)
+
 
     def battle_goto_smart(self, target, look_at):
         if distance(self.me, target) < 1.42 * MATRIX_CELL_SIZE:
@@ -380,7 +368,7 @@ class Strategy:
     @cached_property
     def top_line_bound(self):
         most_vanguard_ally = max(self.top_line_allies, key=self.top_abs_to_relative_position, default=None)
-        vanguard_allies = units_in_radius(self.top_line_allies, most_vanguard_ally, VANGUARD_ALLY_RADIUS)
+        vanguard_allies = get_units_in_radius(self.top_line_allies, most_vanguard_ally, VANGUARD_ALLY_RADIUS)
         return center_of_mass(vanguard_allies) or most_vanguard_ally
 
     @cached_property
@@ -410,27 +398,3 @@ class Strategy:
             return Vec(LINES_PADDING / 2, (1 - relative * 2) * (self.world.height - LINES_PADDING) + LINES_PADDING / 2)
         else:
             return Vec((relative - 0.5) * 2 * (self.world.width - LINES_PADDING) + LINES_PADDING / 2, LINES_PADDING / 2)
-
-
-def opposite_faction(faction):
-    return Faction.RENEGADES if faction == Faction.ACADEMY else Faction.ACADEMY
-
-
-def units_in_radius(units, point, radius):
-    for unit in units:
-        if distance(unit, point) < radius:
-            yield unit
-
-
-def center_of_mass(units):
-    x_sum, y_sum = 0, 0
-    count = 0
-    for unit in units:
-        x_sum += unit.x
-        y_sum += unit.y
-        count += 1
-
-    if count == 0:
-        return None
-    else:
-        return Vec(x_sum / count, y_sum / count)

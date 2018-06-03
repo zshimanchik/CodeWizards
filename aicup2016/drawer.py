@@ -28,10 +28,16 @@ class Drawer:
         with self.debug.abs() as drawer:
             self.draw_text(drawer)
 
+        with self.debug.post() as drawer:
+            if hasattr(self.strategy, 'stay_at'):
+                drawer.fill_circle(self.strategy.stay_at.x, self.strategy.stay_at.y, 10, (0,1,0))
+            if hasattr(self.strategy, 'next_target'):
+                drawer.fill_circle(self.strategy.next_target.x, self.strategy.next_target.y, 10, (1,1,0))
+
     def _draw_potential_map(self, drawer):
         pm = self.strategy.potential_map
         assert isinstance(pm, PotentialMap)
-        max_value = pm.map.max()
+        max_value = abs(pm.map).max()
         for row in range(pm.CELL_AMOUNT):
             for col in range(pm.CELL_AMOUNT):
                 x = col * pm.CELL_SIZE + pm.HALF_CELL_SIZE
