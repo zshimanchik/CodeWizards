@@ -4,6 +4,7 @@ from collections import deque
 from heapq import heappush, heappop
 from itertools import chain
 
+from constants import *
 from model.ActionType import ActionType
 from model.Building import Building
 from model.Faction import Faction
@@ -14,10 +15,6 @@ from model.World import World
 from potential_map import PotentialMap
 from strategy.map import Map
 from utils import cached_property, distance
-
-from constants import *
-
-DEBUG = True
 
 
 class Vec:
@@ -50,18 +47,22 @@ class MyStrategy:
     move_state = MoveState.STAYING
     matrix = [[0] * MATRIX_CELL_AMOUNT for _ in range(MATRIX_CELL_AMOUNT)]
 
-    def __init__(self):
+    def __init__(self, debug_client=None, input_event=None):
         self.line_state = LineState.MOVING_TO_LINE
         self._reset_lists()
         self._reset_cached_values()
         self.map = Map()
         self.potential_map = PotentialMap()
-        if DEBUG:
+
+        if debug_client is not None:
             from drawer import Drawer
-            self.drawer = Drawer()
+            self.drawer = Drawer(debug_client)
+        else:
+            self.drawer = None
+
+        if input_event is not None:
             from debug_control import DebugControl
-            self.debug_control = DebugControl(self)
-            self.debug_control.start()
+            self.debug_control = DebugControl(self, input_event)
 
     def move(self, me: Wizard, world: World, game: Game, move: Move):
         self.me = me
@@ -75,7 +76,7 @@ class MyStrategy:
         self._check_state()
         self.update()
 
-        if DEBUG:
+        if self.drawer is not None:
             self.drawer.draw_all(self, me, world, game, move)
 
     def _derive_nearest(self):

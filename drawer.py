@@ -1,17 +1,15 @@
-from debug_client import DebugClient
+from constants import *
 from model.Game import Game
 from model.Move import Move
 from model.Wizard import Wizard
 from model.World import World
-
-from constants import *
 from potential_map import PotentialMap
-from utils import distance, distance2
+from utils import distance2
 
 
 class Drawer:
-    def __init__(self):
-        self.debug = DebugClient()
+    def __init__(self, debug_client):
+        self.debug = debug_client
         self.draw_potential_map = False
 
     def draw_all(self, strategy, me: Wizard, world: World, game: Game, move: Move):
