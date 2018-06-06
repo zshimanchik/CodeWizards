@@ -222,6 +222,10 @@ class Strategy:
 
     def battle_goto(self, target, look_at):
         delta_v = target - self.me
+
+        if delta_v.x != 0 or delta_v.y != 0:
+            delta_v = self._calc_strafe(delta_v)
+
         cos_a = math.cos(-self.me.angle)
         sin_a = math.sin(-self.me.angle)
         delta_v = Vec(cos_a * delta_v.x - sin_a * delta_v.y, sin_a * delta_v.x + cos_a * delta_v.y)
@@ -297,34 +301,31 @@ class Strategy:
         return turn
 
     def _calc_strafe(self, vec: Vec):
+        self.straight_vec = vec
+        shift = self.game.wizard_strafe_speed * 4
         obj = self._get_closest_strafe_object()
         if obj:
+            # calculation vector from point (obj.x, obj.y) to line [(self.me.x, self.me.y), vec]
             a = vec.y
             b = -vec.x
             c = (self.me.x - obj.x) * (-vec.y) + (self.me.y - obj.y) * vec.x
 
-            x0 = - (a * c) / (a ** 2 + b ** 2)
-            y0 = - (b * c) / (a ** 2 + b ** 2)
-            if math.hypot(x0, y0) <= obj.radius + self.me.radius:
-                if vec.y > 0:
-                    if x0 < 0:
-                        sign = 1
-                    else:
-                        sign = -1
-                else:
-                    if x0 < 0:
-                        sign = -1
-                    else:
-                        sign = 1
-                return self.game.wizard_strafe_speed * sign
-        return 0
+            x0 = (a * c) / (a ** 2 + b ** 2)
+            y0 = (b * c) / (a ** 2 + b ** 2)
+            vec0 = Vec(x0, y0)
+            self.vec0 = vec0
+            self.vec0_obj = obj
+            self.vec_shift = vec0.normalized * -shift
+            overlapping = (obj.radius + self.me.radius + 5) - vec0.length
+            if overlapping >= 0:
+                return vec - vec0.normalized * shift
+        return vec
 
     def _get_closest_strafe_object(self):
         closest_obj = None
         for obj in self.nearest_objects:
-            if obj.distance < STRAFE_OBJECT_MAX_DISTANCE \
-                    and (closest_obj is None or obj.distance < closest_obj.distance) \
-                    and abs(self.me.get_angle_to_unit(obj)) <= math.pi/2:
+            if obj.distance - self.me.radius - obj.radius < STRAFE_OBJECT_MAX_DISTANCE \
+                    and (closest_obj is None or obj.distance < closest_obj.distance):
                 closest_obj = obj
         return closest_obj
 

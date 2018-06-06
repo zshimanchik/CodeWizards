@@ -33,6 +33,15 @@ class Drawer:
                 drawer.fill_circle(self.strategy.stay_at.x, self.strategy.stay_at.y, 10, (0,1,0))
             if hasattr(self.strategy, 'next_target'):
                 drawer.fill_circle(self.strategy.next_target.x, self.strategy.next_target.y, 10, (1,1,0))
+            if hasattr(self.strategy, 'straight_vec'):
+                self._draw_vec(drawer, self.me, self.strategy.straight_vec, (0, 1, 0))
+            if hasattr(self.strategy, 'vec0') and hasattr(self.strategy, 'vec0_obj'):
+                self._draw_vec(drawer, self.strategy.vec0_obj, self.strategy.vec0 * -1, (0, 1, 0))
+            if hasattr(self.strategy, 'vec_shift'):
+                self._draw_vec(drawer, self.me, self.strategy.vec_shift, (0, 0, 1))
+
+    def _draw_vec(self, drawer, obj, vec, color):
+        drawer.line(obj.x, obj.y, obj.x + vec.x, obj.y + vec.y, color)
 
     def _draw_potential_map(self, drawer):
         pm = self.strategy.potential_map
@@ -87,8 +96,9 @@ class Drawer:
         text = [
             f'tick: {self.world.tick_index}',
             f'{int(self.me.x)}, {int(self.me.y)}',
-            str(self.strategy.move_state),
-            str(self.strategy.line_state),
+            f'goal: {self.strategy.goal}',
+            f'move_state: {self.strategy.move_state}',
+            f'line_state: {self.strategy.line_state}',
             f'{int(keyboard_wizard.x)}, {int(keyboard_wizard.y)}'
         ]
 

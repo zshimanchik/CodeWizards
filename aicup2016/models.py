@@ -31,6 +31,10 @@ class Vec:
     def length(self):
         return math.hypot(self.x, self.y)
 
+    @property
+    def normalized(self):
+        return self / self.length
+
 
 class MoveState:
     STAYING = 'staying'
