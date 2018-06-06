@@ -52,7 +52,7 @@ class Drawer:
                 x = col * pm.CELL_SIZE + pm.HALF_CELL_SIZE
                 y = row * pm.CELL_SIZE + pm.HALF_CELL_SIZE
 
-                if distance2(self.me.x, self.me.y, x, y) < 1000000:
+                if distance2(self.me.x, self.me.y, x, y) < 490000:
                     if pm.map[row, col] > 0:
                         color_value = min(0.9, pm.map[row, col] / max_value)
                         color = (0.9 - color_value, 0.9, 0.9 - color_value)
