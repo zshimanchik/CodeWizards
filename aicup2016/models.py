@@ -46,3 +46,8 @@ class MoveState:
 class LineState:
     MOVING_TO_LINE = 'moving_to_line'
     ON_LINE = 'on_line'
+
+
+class GoalState:
+    FARM = 'farm'
+    TAKE_BONUS = 'take_bonus'

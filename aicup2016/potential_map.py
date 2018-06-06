@@ -28,6 +28,10 @@ class PotentialMap:
 
     def build_buildings_map(self):
         self.buildings_map = np.zeros((self.CELL_AMOUNT, self.CELL_AMOUNT))
+        self.buildings_map[0, :] = c.TREE_FORCE
+        self.buildings_map[-1, :] = c.TREE_FORCE
+        self.buildings_map[:, 0] = c.TREE_FORCE
+        self.buildings_map[:, -1] = c.TREE_FORCE
         for unit in self.strategy.world.buildings:
             self.put_simple(self.buildings_map, unit, c.TREE_FORCE, unit.radius + self.strategy.me.radius)
 
@@ -52,14 +56,14 @@ class PotentialMap:
         for obj in self.strategy.nearest_objects:
             if isinstance(obj, Minion):
                 if obj.faction == self.strategy.me.faction:
-                    self.put_simple(self.map, obj, -200, me.radius+obj.radius)
+                    self.put_simple(self.map, obj, -200, me.radius + obj.radius + c.OBJ_RADIUS_DELTA)
                 else:
-                    self.put_simple(self.map, obj, -200, obj.radius + 100)
+                    self.put_simple(self.map, obj, -200, obj.radius + obj.radius + 70)
             elif isinstance(obj, Wizard):
                 if obj.faction == self.strategy.me.faction:
-                    self.put_simple(self.map, obj, -200, me.radius + obj.radius)
+                    self.put_simple(self.map, obj, -200, me.radius + obj.radius + c.OBJ_RADIUS_DELTA)
                 else:
-                    self.put_simple(self.map, obj, -200, me.radius + obj.radius)
+                    self.put_simple(self.map, obj, -200, me.radius + obj.radius + c.OBJ_RADIUS_DELTA)
 
         # self.map = np.minimum(np.minimum(self.map, self.buildings_map), self.trees_map)
         self.map = self.map + self.buildings_map + self.trees_map
@@ -86,11 +90,11 @@ class PotentialMap:
         me = self.strategy.me
         me_row = int(me.y // self.CELL_SIZE)
         me_col = int(me.x // self.CELL_SIZE)
-        best_row, best_col, best_value = me_row, me_col, self.map[me_row, me_col]
+        best_row, best_col, best_value = me_row, me_col, None
         for drow, dcol in ((-1, 0), (0, -1), (1, 0), (0, 1), (-1, -1), (-1, 1), (1, 1), (1, -1)):
             row = me_row + drow
             col = me_col + dcol
-            if self.map[row, col] > best_value:
+            if best_value is None or self.map[row, col] > best_value:
                 best_row, best_col, best_value = row, col, self.map[row, col]
 
         x = best_col * self.CELL_SIZE + self.HALF_CELL_SIZE
